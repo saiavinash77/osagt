@@ -1,0 +1,52 @@
+# Render.com deployment config
+# https://render.com/docs/blueprint-spec
+
+services:
+  # ── Web UI & API ──────────────────────────────────────────────────────────
+  - type: web
+    name: hitl-agent-web
+    runtime: docker
+    dockerfilePath: ./docker/Dockerfile.app
+    dockerContext: .
+    startCommand: python web_server.py
+    plan: free          # upgrade to starter ($7/mo) to avoid sleep
+    healthCheckPath: /health
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false     # set manually in Render dashboard
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_USERNAME
+        sync: false
+      - key: ISSUE_LABELS
+        value: "good first issue,help wanted"
+      - key: LANGUAGE_FILTER
+        value: "python"
+      - key: AUTO_RUN
+        value: "false"
+      - key: WEB_HOST
+        value: "0.0.0.0"
+      - key: WEB_PORT
+        value: "8000"
+      - key: LOG_LEVEL
+        value: "INFO"
+
+  # ── Background Scheduler ──────────────────────────────────────────────────
+  - type: worker
+    name: hitl-agent-scheduler
+    runtime: docker
+    dockerfilePath: ./docker/Dockerfile.app
+    dockerContext: .
+    startCommand: python scheduler.py
+    plan: free
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_USERNAME
+        sync: false
+      - key: AUTO_RUN
+        value: "true"
+      - key: SCHEDULE_INTERVAL_HOURS
+        value: "6"

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HITL Contributor Agent</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --accent: #238636; --danger: #da3633; --warn: #e3b341;
+    --text: #c9d1d9; --muted: #8b949e; --link: #58a6ff;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  header {
+    padding: 16px 32px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+  }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  header span { color: var(--muted); font-size: 0.85rem; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+  .btn {
+    padding: 8px 18px; border: none; border-radius: 6px;
+    font-size: 0.9rem; cursor: pointer; font-weight: 500; transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary  { background: var(--accent); color: #fff; }
+  .btn-danger   { background: var(--danger); color: #fff; }
+  .btn-warn     { background: var(--warn);   color: #000; }
+  .btn-ghost    { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 1rem; margin-bottom: 12px; color: var(--link); }
+
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+  }
+  .badge-running   { background: #1f4068; color: #58a6ff; }
+  .badge-review    { background: #3d2a00; color: var(--warn); }
+  .badge-done      { background: #122b1a; color: #3fb950; }
+  .badge-error     { background: #350d0d; color: #f85149; }
+  .badge-pending   { background: #1e1e1e; color: var(--muted); }
+
+  .meta-grid { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; font-size: 0.88rem; }
+  .meta-grid dt { color: var(--muted); }
+  .meta-grid dd a { color: var(--link); text-decoration: none; }
+
+  pre.diff {
+    background: #0d1117; border: 1px solid var(--border);
+    border-radius: 6px; overflow-x: auto; padding: 16px;
+    font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.6;
+    max-height: 520px; overflow-y: auto;
+  }
+  .diff-add  { color: #3fb950; }
+  .diff-rem  { color: #f85149; }
+  .diff-hunk { color: var(--muted); }
+
+  .decision-bar {
+    display: flex; gap: 10px; align-items: flex-start; margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  textarea {
+    width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 0.88rem; resize: vertical;
+    margin-top: 10px;
+  }
+
+  .tests { font-size: 0.82rem; margin-bottom: 10px; }
+  .tests.pass { color: #3fb950; }
+  .tests.fail { color: #f85149; }
+
+  .spinner { display: inline-block; width: 16px; height: 16px;
+    border: 2px solid var(--muted); border-top-color: var(--link);
+    border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .history-list { list-style: none; }
+  .history-list li {
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+    font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;
+  }
+  .history-list li:last-child { border-bottom: none; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 12px 20px; border-radius: 8px; font-size: 0.88rem;
+    opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999;
+  }
+  .toast.show { opacity: 1; }
+
+  #empty-state { text-align: center; color: var(--muted); padding: 60px 0; }
+  #empty-state p { margin-top: 8px; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>🤖</div>
+  <h1>HITL Contributor Agent</h1>
+  <span>Human-in-the-Loop · GitHub · Claude 3.5 Sonnet</span>
+  <div style="margin-left:auto">
+    <button class="btn btn-primary" id="startBtn" onclick="startRun()">▶ Start New Run</button>
+  </div>
+</header>
+
+<div class="container">
+  <!-- Active Run Panel -->
+  <div id="runPanel" style="display:none">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+        <h2>Active Run</h2>
+        <span id="statusBadge" class="badge badge-pending">pending</span>
+      </div>
+
+      <div id="runMeta" class="meta-grid" style="display:none">
+        <dt>Repo</dt>     <dd id="metaRepo">—</dd>
+        <dt>Issue</dt>    <dd><a id="metaIssueLink" href="#" target="_blank" id="metaIssue">—</a></dd>
+        <dt>Iteration</dt><dd id="metaIter">—</dd>
+      </div>
+    </div>
+
+    <!-- Plan summary (shown once architect completes) -->
+    <div class="card" id="planCard" style="display:none">
+      <h2>📋 Implementation Plan</h2>
+      <p id="planSummary" style="font-size:.9rem; line-height:1.6; color:var(--text)"></p>
+    </div>
+
+    <!-- Diff review -->
+    <div class="card" id="diffCard" style="display:none">
+      <h2>📝 Proposed Diff</h2>
+      <div id="testResult" class="tests"></div>
+      <pre class="diff" id="diffContent"></pre>
+
+      <!-- Decision controls (only shown when awaiting_review) -->
+      <div id="decisionPanel" style="display:none">
+        <div class="decision-bar">
+          <button class="btn btn-primary" onclick="decide('approve')">✅ Approve & Submit PR</button>
+          <button class="btn btn-danger"  onclick="decide('reject')">❌ Reject</button>
+          <button class="btn btn-warn"    onclick="toggleFeedback()">💬 Give Feedback</button>
+        </div>
+        <div id="feedbackBox" style="display:none">
+          <textarea id="feedbackText" rows="3" placeholder="Describe what to change (e.g. 'Use snake_case', 'Don't modify the public API')"></textarea>
+          <button class="btn btn-warn" style="margin-top:8px" onclick="decide('feedback')">Send Feedback & Regenerate</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PR success -->
+    <div class="card" id="prCard" style="display:none; border-color: #238636">
+      <h2 style="color:#3fb950">🎉 Pull Request Opened!</h2>
+      <p style="margin-top:8px">
+        <a id="prLink" href="#" target="_blank" style="color:var(--link)">View PR on GitHub →</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="emptyState">
+    <div style="font-size:3rem">🤖</div>
+    <p>No active run. Click <strong>Start New Run</strong> to begin.</p>
+  </div>
+
+  <!-- History -->
+  <div class="card" id="historyCard" style="margin-top:32px">
+    <h2>📋 Recent Pull Requests</h2>
+    <ul class="history-list" id="historyList">
+      <li style="color:var(--muted); font-size:.85rem">Loading…</li>
+    </ul>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';   // same origin
+let currentRunId = null;
+let pollTimer = null;
+
+function toast(msg, duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function renderDiff(text) {
+  return text.split('\n').map(line => {
+    if (line.startsWith('+') && !line.startsWith('+++')) return `<span class="diff-add">${esc(line)}</span>`;
+    if (line.startsWith('-') && !line.startsWith('---')) return `<span class="diff-rem">${esc(line)}</span>`;
+    if (line.startsWith('@@')) return `<span class="diff-hunk">${esc(line)}</span>`;
+    return esc(line);
+  }).join('\n');
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function setBadge(status) {
+  const el = document.getElementById('statusBadge');
+  const map = {
+    running: ['Running…', 'badge-running'],
+    pending: ['Pending', 'badge-pending'],
+    awaiting_review: ['⚠ Awaiting Review', 'badge-review'],
+    completed: ['Completed', 'badge-done'],
+    error: ['Error', 'badge-error'],
+  };
+  const [label, cls] = map[status] || ['Unknown', 'badge-pending'];
+  el.textContent = label;
+  el.className = `badge ${cls}`;
+}
+
+async function startRun() {
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('runPanel').style.display = 'block';
+  // Reset UI
+  ['planCard','diffCard','prCard'].forEach(id => document.getElementById(id).style.display = 'none');
+  document.getElementById('decisionPanel').style.display = 'none';
+  document.getElementById('feedbackBox').style.display = 'none';
+
+  setBadge('pending');
+
+  try {
+    const res = await fetch(`${API}/api/run`, { method: 'POST' });
+    const data = await res.json();
+    currentRunId = data.run_id;
+    toast(`Run ${currentRunId} started`);
+    pollStatus();
+  } catch(e) {
+    toast('Failed to start run: ' + e.message);
+    document.getElementById('startBtn').disabled = false;
+  }
+}
+
+async function pollStatus() {
+  if (!currentRunId) return;
+  try {
+    const res = await fetch(`${API}/api/run/${currentRunId}`);
+    const d = await res.json();
+    updateUI(d);
+
+    if (['running', 'pending'].includes(d.status)) {
+      pollTimer = setTimeout(pollStatus, 2500);
+    } else {
+      document.getElementById('startBtn').disabled = false;
+    }
+  } catch(e) {
+    console.error(e);
+    pollTimer = setTimeout(pollStatus, 5000);
+  }
+}
+
+function updateUI(d) {
+  setBadge(d.status);
+
+  if (d.repo || d.issue_title) {
+    document.getElementById('runMeta').style.display = 'grid';
+    document.getElementById('metaRepo').textContent = d.repo || '—';
+    document.getElementById('metaIssue').textContent = d.issue_title || '—';
+    document.getElementById('metaIssueLink').href = d.issue_url || '#';
+    document.getElementById('metaIter').textContent = d.iteration ?? '—';
+  }
+
+  if (d.plan_summary) {
+    document.getElementById('planCard').style.display = 'block';
+    document.getElementById('planSummary').textContent = d.plan_summary;
+  }
+
+  if (d.diff_text) {
+    document.getElementById('diffCard').style.display = 'block';
+    document.getElementById('diffContent').innerHTML = renderDiff(d.diff_text);
+    const testEl = document.getElementById('testResult');
+    if (d.tests_passed === true) {
+      testEl.textContent = '✅ Sandbox tests passed'; testEl.className = 'tests pass';
+    } else if (d.tests_passed === false) {
+      testEl.textContent = '❌ Sandbox tests failed'; testEl.className = 'tests fail';
+    }
+  }
+
+  if (d.status === 'awaiting_review') {
+    document.getElementById('decisionPanel').style.display = 'block';
+  } else {
+    document.getElementById('decisionPanel').style.display = 'none';
+  }
+
+  if (d.pr_url) {
+    document.getElementById('prCard').style.display = 'block';
+    document.getElementById('prLink').href = d.pr_url;
+    document.getElementById('prLink').textContent = d.pr_url;
+  }
+
+  if (d.error) toast('Error: ' + d.error, 6000);
+}
+
+function toggleFeedback() {
+  const box = document.getElementById('feedbackBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function decide(action) {
+  if (!currentRunId) return;
+  const feedbackText = document.getElementById('feedbackText').value.trim();
+  if (action === 'feedback' && !feedbackText) {
+    toast('Please enter feedback before sending.');
+    return;
+  }
+
+  document.getElementById('decisionPanel').style.display = 'none';
+  setBadge('running');
+
+  try {
+    await fetch(`${API}/api/run/${currentRunId}/decision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, feedback_text: feedbackText || null }),
+    });
+    document.getElementById('feedbackText').value = '';
+    document.getElementById('feedbackBox').style.display = 'none';
+    toast(`Decision: ${action}`);
+    if (action !== 'reject') pollTimer = setTimeout(pollStatus, 2000);
+  } catch(e) {
+    toast('Failed to send decision: ' + e.message);
+  }
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch(`${API}/api/history`);
+    const data = await res.json();
+    const list = document.getElementById('historyList');
+    if (!data.prs.length) {
+      list.innerHTML = '<li style="color:var(--muted)">No PRs submitted yet.</li>';
+      return;
+    }
+    list.innerHTML = data.prs.reverse().map(pr => `
+      <li>
+        <div>
+          <span style="color:var(--muted)">${pr.timestamp?.slice(0,10)}</span>
+          <strong style="margin-left:8px">${pr.repo} #${pr.issue_number}</strong>
+          <span style="margin-left:6px; color:var(--muted)">${pr.issue_title?.slice(0,50)}</span>
+        </div>
+        <a href="${pr.pr_url}" target="_blank" style="color:var(--link); font-size:.8rem">View PR →</a>
+      </li>
+    `).join('');
+  } catch(e) {
+    console.error('History load failed:', e);
+  }
+}
+
+// Init
+loadHistory();
+setInterval(loadHistory, 30000);
+</script>
+</body>
+</html>

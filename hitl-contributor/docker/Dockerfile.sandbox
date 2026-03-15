@@ -1,0 +1,18 @@
+# Sandbox image for running untrusted code changes safely.
+# This image is intentionally minimal — no outbound network at runtime.
+
+FROM python:3.11-slim
+
+# Install only what's needed for cloning, patching, and testing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    patch \
+    && rm -rf /var/lib/apt/lists/*
+
+# Non-root user for extra safety
+RUN useradd -m -u 1000 sandbox
+USER sandbox
+WORKDIR /workspace
+
+# Default command (overridden by the agent at runtime)
+CMD ["bash"]

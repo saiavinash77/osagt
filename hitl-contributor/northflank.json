@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.northflank.com/v1",
+  "project": {
+    "name": "hitl-contributor"
+  },
+  "services": [
+    {
+      "name": "agent-web",
+      "description": "HITL Contributor Agent — Web UI & API",
+      "billing": {
+        "deploymentPlan": "nf-compute-10"
+      },
+      "deployment": {
+        "instances": 1,
+        "docker": {
+          "configType": "customCommand",
+          "customCommand": "python web_server.py"
+        },
+        "buildSettings": {
+          "dockerfile": {
+            "buildContext": "/",
+            "dockerfilePath": "/docker/Dockerfile.app"
+          }
+        },
+        "ports": [
+          {
+            "name": "http",
+            "internalPort": 8000,
+            "public": true,
+            "protocol": "HTTP"
+          }
+        ],
+        "healthChecks": [
+          {
+            "protocol": "HTTP",
+            "path": "/health",
+            "port": 8000,
+            "initialDelaySeconds": 15,
+            "periodSeconds": 30
+          }
+        ]
+      }
+    },
+    {
+      "name": "agent-scheduler",
+      "description": "HITL Contributor Agent — Background Scheduler",
+      "billing": {
+        "deploymentPlan": "nf-compute-10"
+      },
+      "deployment": {
+        "instances": 1,
+        "docker": {
+          "configType": "customCommand",
+          "customCommand": "python scheduler.py"
+        },
+        "buildSettings": {
+          "dockerfile": {
+            "buildContext": "/",
+            "dockerfilePath": "/docker/Dockerfile.app"
+          }
+        }
+      }
+    }
+  ]
+}

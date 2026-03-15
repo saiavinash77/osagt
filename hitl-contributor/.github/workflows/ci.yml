@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Lint & Type-check ──────────────────────────────────────────────────
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint tools
+        run: pip install ruff mypy
+
+      - name: Ruff (lint + format check)
+        run: |
+          ruff check src/ tests/ main.py scheduler.py web_server.py
+          ruff format --check src/ tests/
+
+  # ── Unit tests ─────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest-cov
+
+      - name: Create dummy .env for tests
+        run: |
+          echo "OPENROUTER_API_KEY=sk-test-dummy" >> .env
+          echo "GITHUB_TOKEN=github_pat_test_dummy" >> .env
+          echo "GITHUB_USERNAME=testuser" >> .env
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v --cov=src --cov-report=term-missing
+
+  # ── Docker build check ─────────────────────────────────────────────────
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build app image
+        run: docker build -f docker/Dockerfile.app -t hitl-agent:ci .
+
+      - name: Build sandbox image
+        run: docker build -f docker/Dockerfile.sandbox -t hitl-sandbox:ci docker/
+
+  # ── Secret scan ────────────────────────────────────────────────────────
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
