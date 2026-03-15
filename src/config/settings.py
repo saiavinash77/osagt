@@ -6,20 +6,20 @@ Import `settings` anywhere in the project instead of calling os.environ directly
 
 import os
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # ── LLM ──────────────────────────────────────────────────────────────
-    openrouter_api_key: str = Field(None, env="OPENROUTER_API_KEY")
+    openrouter_api_key: Optional[str] = Field(None, env="OPENROUTER_API_KEY")
     openrouter_base_url: str = Field(
         "https://openrouter.ai/api/v1", env="OPENROUTER_BASE_URL"
     )
     llm_model: str = Field("anthropic/claude-3.5-sonnet", env="LLM_MODEL")
     llm_temperature: float = Field(0.2, env="LLM_TEMPERATURE")
-    gemini_api_key: str = Field(None, env="GEMINI_API_KEY")
+    gemini_api_key: Optional[str] = Field(None, env="GEMINI_API_KEY")
 
     # ── GitHub ────────────────────────────────────────────────────────────
     github_token: str = Field(..., env="GITHUB_TOKEN")
@@ -34,9 +34,9 @@ class Settings(BaseSettings):
     auto_approve_timeout_sec: int = Field(120, env="AUTO_APPROVE_TIMEOUT_SEC")
     
     # ── Email Notifications ───────────────────────────────────────────────
-    smtp_user: str = Field(None, env="SMTP_USER")
-    smtp_pass: str = Field(None, env="SMTP_PASS")
-    notification_email: str = Field(None, env="NOTIFICATION_EMAIL")
+    smtp_user: Optional[str] = Field(None, env="SMTP_USER")
+    smtp_pass: Optional[str] = Field(None, env="SMTP_PASS")
+    notification_email: Optional[str] = Field(None, env="NOTIFICATION_EMAIL")
 
     # ── Docker sandbox ────────────────────────────────────────────────────
     docker_image: str = Field("python:3.11-slim", env="DOCKER_IMAGE")
